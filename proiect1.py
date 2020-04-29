@@ -3,22 +3,13 @@
 from collections import namedtuple 
 import math
 from copy import deepcopy
-# Citesc datele de intrare din fisier
+import time
+
 
 frunze = {}
 Frunza = namedtuple("Frunza", ("id_frunza", "x", "y", "nr_insecte", "g_max"))
-# Deschidem fisierul pentru citire
-with open("proiect1.in", "r") as fin:
-	raza = float(next(fin))
-	greutate_curenta = float(next(fin))
-	frunza_start = next(fin).strip()
-	for linie in fin:
-		id_frunza, x, y, nr_insecte, g_max = linie.split()
-		frunze[id_frunza] = Frunza(id_frunza, float(x), float(y), int(nr_insecte), float(g_max))
-	
+insecte_final = 0
 
-# voi defini cateva functii utile pentru verificari
-#
 def functia_euristica(x, y, raza):
 	# functia euristica este data de cat mai are de parcurs broasca de la pozitia curenta(x, y) pana la mal
 	# distanta se calculeaza raportandu-ne la centrul cercului(0, 0)
@@ -31,20 +22,16 @@ def dist_puncte(x1, y1, x2, y2):
 
 
 class Nod:
-	def __init__(self, frunze, id_frunza_curenta, greutate_curenta):
+	def __init__(self, frunze, id_frunza_curenta, greutate_curenta, insecte_consumate):
 		self.frunze = frunze # tuplu cu toate frunzele
 		self.id_frunza_curenta = id_frunza_curenta # frunza initala pe care se afla broscuta
 		self.greutate_curenta = greutate_curenta
 		# la fiecare pas(saritura pe alta frunza) trebuie sa avem toate frunzele disponibile, frunza pe care ne aflam in acel moment si greutatea curenta a broscutei
-		self.info = (frunze, id_frunza_curenta, greutate_curenta, insecte)
-		# functia euristica - distanta de la frunza initala pana la circumferinta
+		self.info = (frunze, id_frunza_curenta, greutate_curenta, insecte_consumate)
 		frunza_curenta = self.frunze[self.id_frunza_curenta]
 		self.h = functia_euristica(frunza_curenta.x, frunza_curenta.y, raza)
+		self.insecte_consumate = insecte_consumate
 		
-		
-		
-
-	
 	def __str__ (self):
 		return "({}, Greutate = {}, h={})".format(self.frunze[self.id_frunza_curenta],self.greutate_curenta, self.h)
 
@@ -59,9 +46,6 @@ class Arc:
 		self.varf = varf
 		self.cost = cost 
 
-
-
-
 """ Clase folosite in algoritmul A* """
 
 class NodParcurgere:
@@ -71,10 +55,6 @@ class NodParcurgere:
 		Se presupune ca h este proprietate a nodului din graf
 
 	"""
-
-	
-
-
 	def __init__(self, nod_graf, parinte = None, g = 0, f = None):
 		self.nod_graf = nod_graf  	# obiect de tip Nod
 		self.parinte = parinte  	# obiect de tip Nod
@@ -103,13 +83,7 @@ class NodParcurgere:
 		"""
 			Functie care verifica daca nodul "nod" se afla in drumul dintre radacina si nodul curent (self).
 			Verificarea se face mergand din parinte in parinte pana la radacina
-			Se compara doar informatiile nodurilor (proprietatea info)
-			Returnati True sau False.
-
-			"nod" este obiect de tip Nod (are atributul "nod.info")
-			"self" este obiect de tip NodParcurgere (are "self.nod_graf.info")
 		"""
-		### TO DO ... DONE
 		nod_c = self
 		while nod_c.parinte is not None :
 			if nod.info == nod_c.nod_graf.info:
@@ -118,83 +92,49 @@ class NodParcurgere:
 		return False
 
 
-	#se modifica in functie de problema
+	
 	def expandeaza(self):
 		
-		"""Pentru nodul curent (self) parinte, trebuie sa gasiti toti succesorii (fiii)
-		si sa returnati o lista de tupluri (nod_fiu, cost_muchie_tata_fiu),
-		sau lista vida, daca nu exista niciunul.
-		(Fiecare tuplu contine un obiect de tip Nod si un numar.)"""
+		# pentru nodul curent trebuie sa gasim toate nodurile in care putem "merge" respectand anumite proprietati
 		
-		### TO DO ... DONE
+		# lista in care retin succesorii
 		l_succesori = []
 		
-		
-		frunze, id_frunza_curenta, greutate_curenta = self.nod_graf.info
+		# extrag informatia utila din nod
+		frunze, id_frunza_curenta, greutate_curenta, insecte_consumate = self.nod_graf.info
+
 		# trebuie sa aflu frunza pe care sunt(Tuplul corespunzator ei)
 		frunza_curenta = frunze[id_frunza_curenta]
 
 		
 		for frunza in frunze.values():
-			
-			if frunza.id_frunza == frunza_curenta.id_frunza:
-				continue
-			# nu se poate sari deloc pe o frunza daca greutatea broastei adunate cu numarul de insecte de pe frunza depaseste greutatea maxima pe care o poate sustine frunza
-			
-			for insecte in range(0, frunza_curenta.nr_insecte + 1):
-				
-				greutate_noua = greutate_curenta + insecte
-				
-				if dist_puncte(frunza_curenta.x, frunza_curenta.y, frunza.x, frunza.y) > greutate_noua / 3:
-					# print()
-					# print(f"{dist_puncte(frunza_curenta.x, frunza_curenta.y, frunza.x, frunza.y)} > {greutate_noua / 3}")
+			# pentru fiecare "frunza" din lista, dar care sa nu fie frunza curenta
+			if frunza.id_frunza != frunza_curenta.id_frunza:
+				# pentru fiecare insecta mancata in plus trebuie sa luam toate variantele(1 -> numarul total de insecte de pe frunza) si sa "contruim" un succesor separat pentru fiecare
+
+				for insecte in range(0, frunza_curenta.nr_insecte + 1):
+					# greutatea noua a broastei se calculeaza insumand greutatea sa curenta cu numarul de insecte consumate de pe frunza
+					greutate_noua = greutate_curenta + insecte
 					
-					# print(frunza)
-					# print("Frunza asta nu-i buna pentru frunza asta")
-					# print(frunza_curenta)
-					# print("deoarece distanta nu este buna")
-					# print(dist_puncte(frunza_curenta.x, frunza_curenta.y, frunza.x, frunza.y))
-					# print("greutatea fiind asta")
-					# print(greutate_noua)
-					# print()
-					continue
-				# se scade 1 la fiecare salt
-				greutate_noua -= 1
-				# nu am cum sa sar pe acea frunza
-				if greutate_noua > frunza.g_max:
-					continue
-				if greutate_noua == 0:
-					continue
-				# print()
-				# print("Sunt la frunza asta", end = " ")
-				# print(frunza_curenta)
-				# print("si incerc sa sar pe frunza asta", end = " ")
-				# print(frunza)
-				# print("si am greutatea asta", end = " ")
-				# print(greutate_noua)
-				# print("distanta dintre frunze fiind")
-				# print(dist_puncte(frunza_curenta.x, frunza_curenta.y, frunza.x, frunza.y))
-				# print()
+					if dist_puncte(frunza_curenta.x, frunza_curenta.y, frunza.x, frunza.y) <= greutate_noua / 3:
+					
+						
+						# daca greutatea curenta depaseste greutatea maxima suportata de frunza pe care doresc sa sar, atunci saltul nu poate fi facut
+						if greutate_noua - 1 < frunza.g_max:
+							# se scade 1 la fiecare salt
+							greutate_noua -= 1
+							if greutate_noua:
+								# daca broscuta a ajuns la greutate 0 in urma saltului aceasta moare
+								# fac o copie a listei de frunze
+								frunze_noi = deepcopy(frunze)
+								
+								# acum trebuie sa modific frunza curenta in tuplu, sa actualizez numarul de insecte consumate
+								frunze_noi[frunze[id_frunza_curenta]] = Frunza(frunza_curenta.id_frunza, frunza_curenta.x, frunza_curenta.y, frunza_curenta.nr_insecte - insecte, frunza_curenta.g_max)
+								nod = Nod(frunze_noi, frunza.id_frunza, greutate_noua, insecte)
+								# fiecare drum are costul 1
+								l_succesori.append((nod, 1))					 
 
-				frunze_noi = deepcopy(frunze)
-				
-				# acum trebuie sa modific frunza curenta in tuplu, sa actualizez numarul de insecte consumate
-				frunze_noi[frunza_curenta.id_frunza] = Frunza(
-					frunza_curenta.id_frunza,
-					frunza_curenta.x,
-					frunza_curenta.y,
-					frunza_curenta.nr_insecte - insecte,
-					frunza_curenta.g_max
-				)
-				nod = Nod(frunze_noi, frunza.id_frunza, greutate_noua)
-				# fiecare drum are costul 1
-				l_succesori.append((nod, 1))					 
-
-				
 		
-		# returnam lista de succesori
-		# print(f"Pentru frunza curenta {frunza_curenta} avem urmatorii succesori")
-		# print(l_succesori)
 		return l_succesori
 
 
@@ -203,12 +143,13 @@ class NodParcurgere:
 		
 
 
-	#se modifica in functie de problema
+	
 	def test_scop(self):
-		frunza = self.nod_graf.frunze[self.nod_graf.id_frunza_curenta]
+		frunza_curenta = self.nod_graf.frunze[self.nod_graf.id_frunza_curenta]
 		greutate = self.nod_graf.greutate_curenta
 		# determin daca pot sa sar de la frunza pe care se afla acuma broasca la mal
-		return functia_euristica(frunza.x, frunza.y, raza) <= greutate / 3
+		return (raza - dist_puncte(frunza_curenta.x, frunza_curenta.y, 0 ,0)) <= greutate / 3
+		
 
 	def __str__ (self):
 		parinte=self.parinte if self.parinte is None else self.parinte.nod_graf.info
@@ -251,35 +192,51 @@ def in_lista(l, nod):
 	return None
 
 
-def a_star():
+def a_star(stare_initiala_finala):
 	"""
 		Functia care implementeaza algoritmul A-star
 	"""
-	# determinam tuplul corespunzator frunzei de plecare
-	### TO DO ... DONE
 	
-
+	
+	# determinam nodul corespunzator frunzei de plecare
+	# initial a mancat 0 insecte(de pe frunza de start)
 	nod_start = Nod(frunze, frunza_start, greutate_curenta, 0)
-	# print("Nod start este" + str(nod_start))
 	rad_arbore = NodParcurgere(nod_start)
-	# print("Radacina arbore este" + str(rad_arbore))
-	# mai intai se va pune in lista open nodul de start iar lista closed va fi vida
 	open = [rad_arbore]  # open va contine elemente de tip NodParcurgere
 	closed = []  # closed va contine elemente de tip NodParcurgere
 
 	while len(open) > 0 :
-
 		
-		# print("Open=" + str_info_noduri(open))	# afisam lista open
-		# print("Closed= " + str_info_noduri(closed)) # afisam lista closed
 		nod_curent = open.pop(0)	# scoatem primul element din lista open
 		closed.append(nod_curent)	# si il adaugam la finalul listei closed
-
+		
 		#testez daca nodul extras din lista open este nod scop (si daca da, ies din bucla while)
 		if nod_curent.test_scop():
+			# daca atunci cand verificam scopul lista open nu mai contine niciun element
+			# inseamna ca primul nod(frunza de plecare) este si nodul scop, deci dupa acea frunza poate sa sara direct la mal
+			if len(open) == 0:
+				# adica starea initiala este si finala(adica broscuta poate sari direct de pe frunza pe care se afla la mal, insa trebuie sa indepleineasca toate conditiile)
+				f.write("Starea initiala este si finala.\n")
+				f.write(f"Broscuta a sarit de la frunza {frunza_start}({int(frunze[frunza_start].x)}, {int(frunze[frunza_start].y)}) direct la mal.")
+				
+				stare_initiala_finala = True
+			# trebuie sa vad cate insecte mai poate consuma de la ultima frunza pana la mal
+			# o sa ii dau varianta sa manance cat de multe insecte poate de pe ultima frunza din drum asta pana nu mai este indeplinita conditita
+			greutate = nod_curent.nod_graf.greutate_curenta
+			insecte_frunza = nod_curent.nod_graf.frunze[nod_curent.nod_graf.id_frunza_curenta].nr_insecte
+			poz_x = nod_curent.nod_graf.frunze[nod_curent.nod_graf.id_frunza_curenta].x
+			poz_y = nod_curent.nod_graf.frunze[nod_curent.nod_graf.id_frunza_curenta].y
+			
+			for insecte in range(0, insecte_frunza + 1):
+				greutate_noua = greutate + insecte
+				if raza - dist_puncte(poz_x, poz_y, 0, 0) <= greutate_noua / 3:
+					insecte_final = insecte
+				else:
+					break
+				
 			break
 		
-		l_succesori = nod_curent.expandeaza()	# contine tupluri de tip (Nod, numar)
+		l_succesori = nod_curent.expandeaza()	
 		
 		for (nod_succesor, cost_succesor) in l_succesori:
 			# "nod_curent" este tatal, "nod_succesor" este fiul curent
@@ -327,7 +284,7 @@ def a_star():
 							nod_nou = nod_parcg_vechi
 
 					else: # cand "nod_succesor" nu e nici in closed, nici in open
-						nod_nou = NodParcurgere(nod_graf=nod_succesor, parinte=nod_curent, g=g_succesor)
+						nod_nou = NodParcurgere(nod_graf = nod_succesor, parinte = nod_curent, g = g_succesor)
 						# se calculeaza f automat in constructor
 
 				if nod_nou:
@@ -344,20 +301,58 @@ def a_star():
 
 					open.insert(i, nod_nou)
 
-
-	print("\n------------------ Concluzie -----------------------")
-	if len(open) == 0:
-		print("Broasca nu poate ajunge la mal")
-	else:
+	
+	
+	
+	
+	t_dupa = int(round(time.time() * 1000))
+	# afisez cat a durat gasirea drumului pentru fiecare fisier
+	f.write("Gasirea drumului a durat " + str(t_dupa-t_inainte) + " milisecunde.\n")
+	if len(open) == 0 and stare_initiala_finala == False:
+		f.write("Broscuta nu a putut sa ajunga la mal\n")
+	elif stare_initiala_finala == False:
 		drum = nod_curent.drum_arbore()
-		for nod in drum:
-			nod_graf = nod.nod_graf
-			fr, ident_frunza, greutate, insecte = nod_graf.info
-			print(f"Broscuta a sarit la {ident_frunza}. Greutate: {greutate}")
+		
+		id_linie = 1
+		for i in range(len(drum) - 1):
+			# frunze, id_plecare, greutate_broasca, insecte_consumate = drum.nod_graf.info
+			frunza_curenta = drum[i].nod_graf.frunze[drum[i].nod_graf.id_frunza_curenta]
+			frunza_tinta = drum[i+1].nod_graf.frunze[drum[i+1].nod_graf.id_frunza_curenta]
+			# afisam configuratie pentru frunza initiala cu greutatea broastei de plecare, luata din fisierul de intrare
+			if drum[i].parinte == None:
+				f.write(f"{id_linie}) Broscuta se afla pe frunza initiala {frunza_curenta.id_frunza}({int(frunza_curenta.x), int(frunza_curenta.y)}). Greutate broscuta este {int(greutate_curenta)}.\n")
+				id_linie += 1
+			
+			if i + 2 < len(drum):
+				f.write(f"{id_linie}) Broscuta a sarit de la {frunza_curenta.id_frunza}({int(frunza_curenta.x)}, {int(frunza_curenta.y)}) la {frunza_tinta.id_frunza}({int(frunza_tinta.x)}, {int(frunza_tinta.y)}). Broscuta a mancat {drum[i+2].nod_graf.insecte_consumate} insecte si acum are greutate {int(drum[i+2].nod_graf.insecte_consumate + drum[i+1].nod_graf.greutate_curenta)}\n")
+			else:
+				f.write(f"{id_linie}) Broscuta a sarit de la {frunza_curenta.id_frunza}({int(frunza_curenta.x)}, {int(frunza_curenta.y)}) la {frunza_tinta.id_frunza}({int(frunza_tinta.x)}, {int(frunza_tinta.y)}). De pe ultima frunza broscuta a mancat {insecte_final} insecte si acum are greutatea {int(drum[i+1].nod_graf.greutate_curenta)}\n")
+				
+			
+			id_linie += 1
+		
+		f.write(f"{id_linie}) Broscuta a ajuns la mal din {len(drum)} sarituri\n")
 
 
 
 
 if __name__ == "__main__":
-	a_star()
+
+	lista_fisiere = ["input_1.in", "input_2.in", "input_3.in", "input_4.in"]
+	# primul fisier -> 
+	nr_fisier = 1
+	for fisier in lista_fisiere:
+		stare_initiala_finala = False
+		with open(fisier, "r") as fin:
+			raza = float(next(fin))
+			greutate_curenta = float(next(fin))
+			frunza_start = next(fin).strip()
+			for linie in fin:
+				id_frunza, x, y, nr_insecte, g_max = linie.split()
+				frunze[id_frunza] = Frunza(id_frunza, float(x), float(y), int(nr_insecte), float(g_max))
+		t_inainte = int(round(time.time() * 1000))
+		fisier_output = "output_" + str(nr_fisier) + ".out"
+		f = open(fisier_output, 'w')
+		nr_fisier += 1
+		a_star(stare_initiala_finala)
 	
