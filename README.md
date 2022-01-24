@@ -1,1 +1,1 @@
-# Proiect_IA
+# Artificial-Intelligence-Projects
